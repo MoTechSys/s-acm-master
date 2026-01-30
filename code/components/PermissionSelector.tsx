@@ -5,6 +5,9 @@
  */
 
 import React, { useState, useCallback } from 'react';
+import { ChevronLeft, Check, Minus } from 'lucide-react';
+import * as LucideIcons from 'lucide-react';
+import { cn } from '@/lib/utils';
 import {
   PERMISSION_CATEGORIES,
   PERMISSIONS,
@@ -14,20 +17,16 @@ import {
   getAllChildPermissions,
   getRequiredPermissions,
   PermissionTreeNode,
-} from '../utils/permissions';
+  getSelectedCountInCategory,
+} from '@/lib/permissions';
 
 // =============================================================================
 // الأنواع
 // =============================================================================
 
 interface PermissionSelectorProps {
-  /** الصلاحيات المحددة حالياً */
   selectedPermissions: string[];
-  
-  /** دالة تحديث الصلاحيات */
   onChange: (permissions: string[]) => void;
-  
-  /** تعطيل التعديل */
   disabled?: boolean;
 }
 
@@ -40,10 +39,8 @@ export function PermissionSelector({
   onChange,
   disabled = false,
 }: PermissionSelectorProps) {
-  // الأقسام المفتوحة
   const [openCategories, setOpenCategories] = useState<string[]>([]);
 
-  // فتح/إغلاق قسم
   const toggleCategory = useCallback((categoryId: string) => {
     setOpenCategories(prev =>
       prev.includes(categoryId)
@@ -52,18 +49,15 @@ export function PermissionSelector({
     );
   }, []);
 
-  // تحديد صلاحية
   const togglePermission = useCallback((permissionId: string, checked: boolean) => {
     if (disabled) return;
 
     let newPermissions = [...selectedPermissions];
 
     if (checked) {
-      // إضافة الصلاحية والصلاحيات المطلوبة
       const required = getRequiredPermissions(permissionId);
-      newPermissions = [...new Set([...newPermissions, ...required])];
+      newPermissions = Array.from(new Set([...newPermissions, ...required]));
     } else {
-      // إزالة الصلاحية والصلاحيات الفرعية
       const children = getAllChildPermissions(permissionId);
       const toRemove = [permissionId, ...children];
       newPermissions = newPermissions.filter(p => !toRemove.includes(p));
@@ -72,7 +66,6 @@ export function PermissionSelector({
     onChange(newPermissions);
   }, [selectedPermissions, onChange, disabled]);
 
-  // تحديد كل صلاحيات القسم
   const toggleAllCategory = useCallback((categoryId: string, checked: boolean) => {
     if (disabled) return;
 
@@ -82,24 +75,20 @@ export function PermissionSelector({
     let newPermissions = [...selectedPermissions];
 
     if (checked) {
-      // إضافة كل صلاحيات القسم
-      newPermissions = [...new Set([...newPermissions, ...category.permissions])];
+      newPermissions = Array.from(new Set([...newPermissions, ...category.permissions]));
     } else {
-      // إزالة كل صلاحيات القسم
       newPermissions = newPermissions.filter(p => !category.permissions.includes(p));
     }
 
     onChange(newPermissions);
   }, [selectedPermissions, onChange, disabled]);
 
-  // التحقق من تحديد كل صلاحيات القسم
   const isCategoryFullySelected = useCallback((categoryId: string): boolean => {
     const category = PERMISSION_CATEGORIES.find(c => c.id === categoryId);
     if (!category) return false;
     return category.permissions.every(p => selectedPermissions.includes(p));
   }, [selectedPermissions]);
 
-  // التحقق من تحديد بعض صلاحيات القسم
   const isCategoryPartiallySelected = useCallback((categoryId: string): boolean => {
     const category = PERMISSION_CATEGORIES.find(c => c.id === categoryId);
     if (!category) return false;
@@ -155,54 +144,61 @@ function CategoryAccordion({
   disabled,
 }: CategoryAccordionProps) {
   const permissionTree = buildPermissionTree(category.id);
+  const { selected, total } = getSelectedCountInCategory(category.id, selectedPermissions);
+  
+  // الحصول على الأيقونة ديناميكياً
+  const IconComponent = (LucideIcons as any)[category.icon] || LucideIcons.Circle;
 
   return (
-    <div className="border border-border rounded-lg overflow-hidden">
+    <div className="border border-border rounded-lg overflow-hidden bg-card">
       {/* رأس القسم */}
-      <div className="flex items-center justify-between p-4 bg-muted/50">
+      <div className="flex items-center justify-between p-3 bg-muted/30 hover:bg-muted/50 transition-colors">
         <button
           type="button"
           onClick={onToggle}
-          className="flex items-center gap-2 text-foreground font-medium"
+          className="flex items-center gap-3 text-foreground font-medium flex-1"
         >
-          {/* أيقونة الطي/الفتح */}
-          <svg
-            className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-90' : ''}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-          
-          {/* اسم القسم */}
+          <ChevronLeft 
+            className={cn(
+              "w-4 h-4 transition-transform duration-200",
+              isOpen && "-rotate-90"
+            )}
+          />
+          <IconComponent className="w-4 h-4 text-primary" />
           <span>{category.nameAr}</span>
-          
-          {/* عدد الصلاحيات المحددة */}
-          <span className="text-xs text-muted-foreground">
-            ({selectedPermissions.filter(p => category.permissions.includes(p)).length}/{category.permissions.length})
+          <span className="text-xs text-muted-foreground font-normal">
+            ({selected}/{total})
           </span>
         </button>
 
         {/* زر تحديد الكل */}
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={isFullySelected}
-            ref={el => {
-              if (el) el.indeterminate = isPartiallySelected;
+        <label className="flex items-center gap-2 cursor-pointer px-2">
+          <div 
+            className={cn(
+              "w-4 h-4 rounded border flex items-center justify-center transition-colors",
+              isFullySelected 
+                ? "bg-primary border-primary" 
+                : isPartiallySelected 
+                  ? "bg-primary/50 border-primary" 
+                  : "border-muted-foreground/50"
+            )}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!disabled) {
+                onToggleAll(!isFullySelected);
+              }
             }}
-            onChange={(e) => onToggleAll(e.target.checked)}
-            disabled={disabled}
-            className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
-          />
-          <span className="text-sm text-muted-foreground">تحديد الكل</span>
+          >
+            {isFullySelected && <Check className="w-3 h-3 text-primary-foreground" />}
+            {isPartiallySelected && !isFullySelected && <Minus className="w-3 h-3 text-primary-foreground" />}
+          </div>
+          <span className="text-xs text-muted-foreground">الكل</span>
         </label>
       </div>
 
       {/* محتوى القسم */}
       {isOpen && (
-        <div className="p-4 space-y-2">
+        <div className="p-3 space-y-1 border-t border-border">
           {permissionTree.map(node => (
             <PermissionNode
               key={node.id}
@@ -242,34 +238,51 @@ function PermissionNode({
   const hasChildren = node.children.length > 0;
 
   // التحقق من تحديد بعض الأبناء
-  const isPartiallySelected = hasChildren && !isSelected &&
-    node.children.some(child => selectedPermissions.includes(child.id));
+  const childrenSelected = hasChildren 
+    ? node.children.filter(child => selectedPermissions.includes(child.id)).length 
+    : 0;
+  const isPartiallySelected = hasChildren && childrenSelected > 0 && childrenSelected < node.children.length;
 
   return (
     <div className="space-y-1">
       {/* الصلاحية */}
       <label
-        className="flex items-center gap-2 cursor-pointer"
-        style={{ paddingRight: `${level * 24}px` }}
+        className={cn(
+          "flex items-center gap-2 cursor-pointer py-1.5 px-2 rounded hover:bg-muted/50 transition-colors",
+          disabled && "opacity-50 cursor-not-allowed"
+        )}
+        style={{ marginRight: `${level * 20}px` }}
       >
-        <input
-          type="checkbox"
-          checked={isSelected}
-          ref={el => {
-            if (el) el.indeterminate = isPartiallySelected;
+        <div 
+          className={cn(
+            "w-4 h-4 rounded border flex items-center justify-center transition-colors flex-shrink-0",
+            isSelected 
+              ? "bg-primary border-primary" 
+              : isPartiallySelected 
+                ? "bg-primary/50 border-primary" 
+                : "border-muted-foreground/50"
+          )}
+          onClick={(e) => {
+            e.preventDefault();
+            if (!disabled) {
+              onToggle(node.id, !isSelected);
+            }
           }}
-          onChange={(e) => onToggle(node.id, e.target.checked)}
-          disabled={disabled}
-          className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
-        />
-        <span className={`text-sm ${isSelected ? 'text-foreground' : 'text-muted-foreground'}`}>
+        >
+          {isSelected && <Check className="w-3 h-3 text-primary-foreground" />}
+          {isPartiallySelected && !isSelected && <Minus className="w-3 h-3 text-primary-foreground" />}
+        </div>
+        <span className={cn(
+          "text-sm",
+          isSelected ? "text-foreground" : "text-muted-foreground"
+        )}>
           {node.nameAr}
         </span>
       </label>
 
       {/* الأبناء */}
       {hasChildren && (
-        <div className="mr-4 border-r border-border pr-2">
+        <div className="mr-4 border-r border-border/50 pr-2">
           {node.children.map(child => (
             <PermissionNode
               key={child.id}
@@ -285,36 +298,5 @@ function PermissionNode({
     </div>
   );
 }
-
-// =============================================================================
-// مثال الاستخدام
-// =============================================================================
-
-/*
-import { PermissionSelector } from './components/PermissionSelector';
-
-function RoleForm() {
-  const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
-
-  return (
-    <form>
-      <div>
-        <label>اسم الدور</label>
-        <input type="text" />
-      </div>
-
-      <div>
-        <label>الصلاحيات</label>
-        <PermissionSelector
-          selectedPermissions={selectedPermissions}
-          onChange={setSelectedPermissions}
-        />
-      </div>
-
-      <button type="submit">حفظ</button>
-    </form>
-  );
-}
-*/
 
 export default PermissionSelector;

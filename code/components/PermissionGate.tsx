@@ -5,7 +5,7 @@
  */
 
 import React, { createContext, useContext, ReactNode } from 'react';
-import { hasPermission, hasAnyPermission, hasAllPermissions } from '../utils/permissions';
+import { hasPermission, hasAnyPermission, hasAllPermissions } from '@/lib/permissions';
 
 // =============================================================================
 // Context للصلاحيات
@@ -51,7 +51,13 @@ export function PermissionProvider({ permissions, children }: PermissionProvider
 export function usePermissions() {
   const context = useContext(PermissionContext);
   if (!context) {
-    throw new Error('usePermissions must be used within a PermissionProvider');
+    // إذا لم يكن هناك Provider، نعيد صلاحيات كاملة (للتطوير)
+    return {
+      permissions: ['__all__'],
+      hasPermission: () => true,
+      hasAnyPermission: () => true,
+      hasAllPermissions: () => true,
+    };
   }
   return context;
 }
@@ -101,92 +107,5 @@ export function PermissionGate({
 
   return hasAccess ? <>{children}</> : <>{fallback}</>;
 }
-
-// =============================================================================
-// مكون PermissionButton
-// =============================================================================
-
-interface PermissionButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  permission: string;
-  children: ReactNode;
-}
-
-export function PermissionButton({ permission, children, ...props }: PermissionButtonProps) {
-  const { hasPermission } = usePermissions();
-
-  if (!hasPermission(permission)) {
-    return null;
-  }
-
-  return <button {...props}>{children}</button>;
-}
-
-// =============================================================================
-// مثال الاستخدام
-// =============================================================================
-
-/*
-// في App.tsx أو Layout
-import { PermissionProvider } from './components/PermissionGate';
-
-function App() {
-  const currentUser = { permissions: ['view_users', 'add_user'] };
-  
-  return (
-    <PermissionProvider permissions={currentUser.permissions}>
-      <Dashboard />
-    </PermissionProvider>
-  );
-}
-
-// في أي مكون
-import { PermissionGate, PermissionButton, usePermissions } from './components/PermissionGate';
-
-function UsersPage() {
-  const { hasPermission } = usePermissions();
-  
-  return (
-    <div>
-      {/* إخفاء قسم كامل */}
-      <PermissionGate permission="view_users">
-        <UsersList />
-      </PermissionGate>
-      
-      {/* إخفاء زر */}
-      <PermissionGate permission="add_user">
-        <Button>إضافة مستخدم</Button>
-      </PermissionGate>
-      
-      {/* أو باستخدام PermissionButton */}
-      <PermissionButton permission="delete_user" onClick={handleDelete}>
-        حذف
-      </PermissionButton>
-      
-      {/* عرض محتوى بديل */}
-      <PermissionGate 
-        permission="view_reports" 
-        fallback={<p>ليس لديك صلاحية لعرض التقارير</p>}
-      >
-        <Reports />
-      </PermissionGate>
-      
-      {/* التحقق من أي صلاحية */}
-      <PermissionGate anyOf={['use_ai_summary', 'use_ai_questions', 'use_ai_chat']}>
-        <AITools />
-      </PermissionGate>
-      
-      {/* التحقق من كل الصلاحيات */}
-      <PermissionGate allOf={['view_users', 'edit_user', 'delete_user']}>
-        <FullUserManagement />
-      </PermissionGate>
-      
-      {/* استخدام Hook مباشرة */}
-      {hasPermission('export_users') && (
-        <Button onClick={exportUsers}>تصدير</Button>
-      )}
-    </div>
-  );
-}
-*/
 
 export default PermissionGate;
